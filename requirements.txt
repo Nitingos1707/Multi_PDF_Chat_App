@@ -127,7 +127,7 @@ smmap
 sniffio
 SQLAlchemy
 starlette
-streamlit
+streamlit==1.19.0
 streamlit-chat
 sympy
 tenacity

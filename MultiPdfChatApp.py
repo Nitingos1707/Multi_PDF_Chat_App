@@ -124,3 +124,4 @@ class MultiPDFChatApp:
                 return self.llm.invoke(question).content
         except Exception as e:
             return f"Error during response generation: {str(e)}"
+

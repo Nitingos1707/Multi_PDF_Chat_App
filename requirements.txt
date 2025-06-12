@@ -1,4 +1,4 @@
-﻿aiohappyeyeballs
+aiohappyeyeballs
 aiohttp
 aiosignal
 altair==4.2.2
@@ -13,7 +13,6 @@ build
 cachetools
 certifi
 charset-normalizer
-chromadb
 click
 colorama
 coloredlogs
@@ -52,7 +51,6 @@ jsonschema
 jsonschema-specifications
 kubernetes
 langchain
-langchain-chroma>=0.2.4
 langchain-community
 langchain-core
 langchain-groq
@@ -154,3 +152,6 @@ wrapt
 yarl
 zipp
 zstandard
+
+# ✅ Added for vectorstore support
+faiss-cpu

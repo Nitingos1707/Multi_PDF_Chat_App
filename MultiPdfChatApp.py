@@ -3,7 +3,7 @@ from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 from langchain.vectorstores import FAISS
-from langchain_groq.chat_models import ChatGroq
+from langchain_google_genai import ChatGoogleGenerativeAI  # ✅ Gemini model
 from PyPDF2 import PdfReader
 import streamlit as st
 import tiktoken
@@ -19,11 +19,12 @@ class MultiPDFChatApp:
         self.vectorstore = None
         self.chunk_hashes = set()
 
-        self.llm = ChatGroq(
-            api_key=st.secrets["GROQ_API_KEY"],
-            model_name=st.secrets.get("GROQ_MODEL", "mixtral-8x7b-32768"),
+        # ✅ Gemini LLM from Google AI
+        self.llm = ChatGoogleGenerativeAI(
+            model=st.secrets.get("GEMINI_MODEL", "models/gemini-pro"),
+            google_api_key=st.secrets["GEMINI_API_KEY"],
             temperature=0.4,
-            max_tokens=1000
+            max_output_tokens=1000
         )
 
         self.memory = ConversationBufferMemory(
@@ -121,6 +122,6 @@ class MultiPDFChatApp:
                 response = chain.invoke({'question': question})
                 return response.get("answer", "Sorry, no answer could be generated.")
             else:
-                return self.llm.invoke(question).content
+                return self.llm.invoke(question)
         except Exception as e:
             return f"Error during response generation: {str(e)}"

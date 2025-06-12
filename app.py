@@ -25,7 +25,7 @@ if 'chat_history' not in st.session_state:
     st.session_state.chat_history = []
 
 if 'chat_app' not in st.session_state:
-    st.session_state.chat_app = None
+    st.session_state.chat_app = MultiPDFChatApp(project_name="default")
 
 if 'chat_initialized' not in st.session_state:
     st.session_state.chat_initialized = False
@@ -41,51 +41,33 @@ with st.sidebar:
     if uploaded_files:
         st.success(f"✅ {len(uploaded_files)} file(s) uploaded")
         for file in uploaded_files:
-            st.write(f"- {file.name} ({file.size/1024:.1f} KB)")
-    else:
-        st.warning("No files uploaded.")
+            st.write(f"- {file.name} ({file.size / 1024:.1f} KB)")
 
-# Project name input
-project_name = st.text_input("Project Name", placeholder="Enter project name...") if uploaded_files else None
+        if not st.session_state.chat_initialized:
+            with st.spinner("Initializing with uploaded PDFs..."):
+                try:
+                    st.session_state.chat_app = MultiPDFChatApp("default", uploaded_files)
+                    if st.session_state.chat_app.run_chat():
+                        st.session_state.chat_initialized = True
+                        st.toast("✅ PDFs processed!")
+                    else:
+                        st.error("❌ Failed to process PDFs.")
+                except Exception as e:
+                    st.error("💥 Initialization failed")
+                    with st.expander("Error Details"):
+                        st.code(str(e))
 
-# Start chat button
-if uploaded_files and project_name and not st.session_state.chat_initialized:
-    if st.button("🚀 Start Chat"):
-        with st.spinner("Initializing chat application..."):
-            try:
-                st.session_state.chat_app = MultiPDFChatApp(project_name, uploaded_files)
+# Show chat status
+if uploaded_files:
+    st.success("📄 You can now ask questions about your uploaded PDFs!")
+else:
+    st.info("💬 No PDFs uploaded — you're chatting with a general AI assistant.")
 
-                progress_bar = st.progress(0)
-                status_text = st.empty()
-
-                status_text.text("🔍 Processing PDFs...")
-                progress_bar.progress(25)
-
-                success = st.session_state.chat_app.run_chat()
-
-                if success:
-                    progress_bar.progress(100)
-                    status_text.text("✅ Chat initialized successfully!")
-                    st.session_state.chat_initialized = True
-                    st.rerun()
-                else:
-                    st.error("❌ Chat initialization failed.")
-                    with st.expander("Debug Information"):
-                        st.write("Check for image-based PDFs or corrupted files.")
-            except Exception as e:
-                st.error("💥 Error during initialization")
-                with st.expander("Error Details"):
-                    st.code(str(e))
-
-# Active chat
-if st.session_state.chat_initialized:
-    st.success("Chat is active. Ask questions about your PDFs!")
-
-# Display history
+# Display chat history
 for role, message in st.session_state.chat_history:
     st.chat_message(role).write(message)
 
-# Chat input
+# Chat input (works with or without PDFs)
 user_input = st.chat_input("Ask a question...")
 
 if user_input:
@@ -98,17 +80,17 @@ if user_input:
                 response = st.session_state.chat_app.get_conversation_chain(user_input)
             except Exception as e:
                 response = f"💥 Error during response: {e}"
-            st.write(response)
+        st.write(response)
 
     st.session_state.chat_history.append(("assistant", response))
 
 # Reset chat
 if st.sidebar.button("🔄 Reset Chat"):
     st.session_state.chat_history = []
-    st.session_state.chat_app = None
+    st.session_state.chat_app = MultiPDFChatApp("default")
     st.session_state.chat_initialized = False
     st.rerun()
 
 # Footer
 st.markdown("---")
-st.markdown("💡 Tip: Upload multiple PDFs and click 'Start Chat' to analyze them together.")
+st.markdown("💡 Tip: You can chat with or without uploading PDFs.")

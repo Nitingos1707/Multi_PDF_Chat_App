@@ -4,9 +4,6 @@ from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 from langchain.vectorstores import FAISS
 from langchain_groq.chat_models import ChatGroq
-from langchain.chat_models import ChatOpenAI
-from langchain.llms import HuggingFaceHub
-# from langchain.llms import DeepSeek
 from PyPDF2 import PdfReader
 import streamlit as st
 import tiktoken
@@ -22,31 +19,12 @@ class MultiPDFChatApp:
         self.vectorstore = None
         self.chunk_hashes = set()
 
-        # Initialize LLMs in fallback order
-        self.llm_groq = ChatGroq(
+        self.llm = ChatGroq(
             api_key=st.secrets["GROQ_API_KEY"],
             model_name=st.secrets.get("GROQ_MODEL", "mixtral-8x7b-32768"),
             temperature=0.4,
             max_tokens=1000
         )
-
-        self.llm_openai = ChatOpenAI(
-            api_key=st.secrets["OPENAI_API_KEY"],
-            temperature=0.4,
-            max_tokens=1000
-        )
-
-        self.llm_huggingface = HuggingFaceHub(
-            repo_id="tiiuae/falcon-7b-instruct",
-            huggingfacehub_api_token=st.secrets["HUGGINGFACEHUB_API_TOKEN"]
-        )
-
-        # self.llm_deepseek = DeepSeek(
-        #     api_key=st.secrets["DEEPSEEK_API_KEY"],
-        #     model_name=st.secrets.get("DEEPSEEK_MODEL", "deepseek-chat"),
-        #     temperature=0.4,
-        #     max_tokens=1000
-        # )
 
         self.memory = ConversationBufferMemory(
             memory_key="chat_history",
@@ -104,39 +82,45 @@ class MultiPDFChatApp:
             print(f"❌ Initialization failed: {e}")
             return False
 
+    def add_new_pdfs(self, new_pdfs: list):
+        try:
+            self.pdf_docs += new_pdfs
+            new_texts = self.get_pdf_text(new_pdfs)
+            new_chunks = self.get_text_chunks(new_texts)
+
+            if not new_chunks:
+                print("⚠️ No new chunks found in uploaded PDFs.")
+                return
+
+            embeddings = HuggingFaceEmbeddings(
+                model_name="sentence-transformers/all-MiniLM-L6-v2",
+                model_kwargs={'device': 'cpu'}
+            )
+
+            if not self.vectorstore:
+                self.vectorstore = FAISS.from_texts(new_chunks, embedding=embeddings)
+            else:
+                self.vectorstore.add_texts(new_chunks, embedding=embeddings)
+
+            print(f"✅ Added {len(new_chunks)} new chunks.")
+        except Exception as e:
+            print(f"❌ Failed to add new PDFs: {e}")
+
     def get_conversation_chain(self, question: str):
         if not question.strip():
             return "Please ask a valid question."
 
-        llm_candidates = [
-            ("Groq", self.llm_groq),
-            ("OpenAI", self.llm_openai),
-            ("HuggingFace", self.llm_huggingface),
-            # ("DeepSeek", self.llm_deepseek)
-        ]
-
-        for provider_name, llm in llm_candidates:
-            try:
-                if self.vectorstore:
-                    chain = ConversationalRetrievalChain.from_llm(
-                        llm=llm,
-                        retriever=self.vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 4}),
-                        memory=self.memory,
-                        return_source_documents=False
-                    )
-                    response = chain.invoke({'question': question})
-                    return f"🤖 ({provider_name}) {response.get('answer', 'No answer.')}"
-                else:
-                    try:
-                        # Use invoke if available
-                        result = llm.invoke(question)
-                        answer = result.content if hasattr(result, "content") else str(result)
-                    except Exception:
-                        # Fallback to predict
-                        answer = llm.predict(question)
-                    return f"🤖 ({provider_name}) {answer}"
-            except Exception as e:
-                print(f"❌ {provider_name} failed: {e}")
-                continue
-
-        return "🚫 All LLMs failed. Please check your API keys or try again later."
+        try:
+            if self.vectorstore:
+                chain = ConversationalRetrievalChain.from_llm(
+                    llm=self.llm,
+                    retriever=self.vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 4}),
+                    memory=self.memory,
+                    return_source_documents=False
+                )
+                response = chain.invoke({'question': question})
+                return response.get("answer", "Sorry, no answer could be generated.")
+            else:
+                return self.llm.invoke(question).content
+        except Exception as e:
+            return f"Error during response generation: {str(e)}"

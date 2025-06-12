@@ -52,7 +52,7 @@ jsonschema
 jsonschema-specifications
 kubernetes
 langchain
-langchain-chroma
+langchain-chroma>=0.2.4
 langchain-community
 langchain-core
 langchain-groq

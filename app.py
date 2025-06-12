@@ -25,7 +25,7 @@ if 'chat_history' not in st.session_state:
     st.session_state.chat_history = []
 
 if 'chat_app' not in st.session_state:
-    st.session_state.chat_app = None
+    st.session_state.chat_app = MultiPDFChatApp(project_name="default")
 
 if 'chat_initialized' not in st.session_state:
     st.session_state.chat_initialized = False
@@ -33,97 +33,51 @@ if 'chat_initialized' not in st.session_state:
 # Header
 st.header('📚 Multi-PDF Chat App')
 
-# Sidebar PDF uploader
+# Sidebar PDF uploader (dynamic during chat)
 with st.sidebar:
-    st.write("📁 Upload your PDF files")
-    uploaded_files = st.file_uploader("Choose PDFs", accept_multiple_files=True, type="pdf")
+    st.write("📁 Upload or add PDF files")
+    new_files = st.file_uploader("Choose PDFs", accept_multiple_files=True, type="pdf")
 
-    if uploaded_files:
-        st.success(f"✅ {len(uploaded_files)} file(s) uploaded")
-        for file in uploaded_files:
-            st.write(f"- {file.name} ({file.size/1024:.1f} KB)")
-    else:
-        st.warning("No files uploaded.")
-
-# Project name input
-project_name = st.text_input("Project Name", placeholder="Enter project name...") if uploaded_files else None
-
-# Start chat button
-if uploaded_files and project_name and not st.session_state.chat_initialized:
-    if st.button("🚀 Start Chat"):
-        with st.spinner("Initializing chat application..."):
-            try:
-                st.session_state.chat_app = MultiPDFChatApp(project_name, uploaded_files)
-
-                progress_bar = st.progress(0)
-                status_text = st.empty()
-
-                status_text.text("🔍 Processing PDFs...")
-                progress_bar.progress(25)
-
+    if new_files:
+        if st.session_state.chat_initialized:
+            st.session_state.chat_app.add_new_pdfs(new_files)
+            st.success("✅ New PDFs added to the conversation!")
+        else:
+            st.session_state.chat_app = MultiPDFChatApp("session", new_files)
+            with st.spinner("Initializing chat..."):
                 success = st.session_state.chat_app.run_chat()
-
                 if success:
-                    progress_bar.progress(100)
-                    status_text.text("✅ Chat initialized successfully!")
                     st.session_state.chat_initialized = True
-                    st.rerun()
+                    st.success("✅ Chat initialized with uploaded PDFs!")
                 else:
-                    st.error("❌ Chat initialization failed.")
-                    with st.expander("Debug Information"):
-                        st.write("Check for image-based PDFs or corrupted files.")
-            except Exception as e:
-                st.error("💥 Error during initialization")
-                with st.expander("Error Details"):
-                    st.code(str(e))
+                    st.error("❌ Initialization failed.")
 
-# Active chat
+# Chat interface
 if st.session_state.chat_initialized:
     st.success("Chat is active. Ask questions about your PDFs!")
+else:
+    st.info("📢 No PDFs uploaded. You can still chat generally!")
 
-    # Quick actions
-    st.write("Quick Actions:")
-    col1, col2, col3 = st.columns(3)
-    if col1.button("📝 Summarize"):
-        user_input = "Summarize the uploaded documents."
-        st.session_state.chat_history.append(("user", user_input))
-        with st.spinner("Generating summary..."):
-            response = st.session_state.chat_app.get_conversation_chain(user_input)
-            st.session_state.chat_history.append(("assistant", response))
-        st.rerun()
-
-    if col2.button("🔍 Key Points"):
-        user_input = "What are the key points of the documents?"
-        st.session_state.chat_history.append(("user", user_input))
-        with st.spinner("Extracting key points..."):
-            response = st.session_state.chat_app.get_conversation_chain(user_input)
-            st.session_state.chat_history.append(("assistant", response))
-        st.rerun()
-
-    if col3.button("🔄 Reset Chat"):
-        st.session_state.chat_history = []
-        st.session_state.chat_app = None
-        st.session_state.chat_initialized = False
-        st.rerun()
-
-# Chat history display
+# Display history
 for role, message in st.session_state.chat_history:
     st.chat_message(role).write(message)
 
 # User input
-if st.session_state.chat_app:
-    user_input = st.chat_input("Ask a question...")
-    if user_input:
-        st.session_state.chat_history.append(("user", user_input))
-        with st.spinner("Thinking..."):
-            response = st.session_state.chat_app.get_conversation_chain(user_input)
-            st.session_state.chat_history.append(("assistant", response))
-        st.rerun()
-elif uploaded_files and project_name:
-    st.info("⬆️ Click 'Start Chat' above to begin.")
-else:
-    st.info("👈 Upload PDFs and enter a project name to begin.")
+user_input = st.chat_input("Ask a question...")
+if user_input:
+    st.session_state.chat_history.append(("user", user_input))
+    with st.spinner("Thinking..."):
+        response = st.session_state.chat_app.get_conversation_chain(user_input)
+        st.session_state.chat_history.append(("assistant", response))
+    st.rerun()
+
+# Reset
+if st.sidebar.button("🔄 Reset Chat"):
+    st.session_state.chat_history = []
+    st.session_state.chat_app = MultiPDFChatApp(project_name="default")
+    st.session_state.chat_initialized = False
+    st.rerun()
 
 # Footer
 st.markdown("---")
-st.markdown("💡 Tip: Upload multiple PDFs to ask questions across all documents.")
+st.markdown("💡 Tip: You can upload more PDFs any time during the chat.")

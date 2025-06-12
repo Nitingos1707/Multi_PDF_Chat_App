@@ -4,6 +4,9 @@ from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 from langchain.vectorstores import FAISS
 from langchain_groq.chat_models import ChatGroq
+from langchain.chat_models import ChatOpenAI
+from langchain.llms import HuggingFaceHub
+from langchain.llms import DeepSeek
 from PyPDF2 import PdfReader
 import streamlit as st
 import tiktoken
@@ -19,9 +22,28 @@ class MultiPDFChatApp:
         self.vectorstore = None
         self.chunk_hashes = set()
 
-        self.llm = ChatGroq(
+        # Initialize LLMs in fallback order
+        self.llm_groq = ChatGroq(
             api_key=st.secrets["GROQ_API_KEY"],
             model_name=st.secrets.get("GROQ_MODEL", "mixtral-8x7b-32768"),
+            temperature=0.4,
+            max_tokens=1000
+        )
+
+        self.llm_openai = ChatOpenAI(
+            api_key=st.secrets["OPENAI_API_KEY"],
+            temperature=0.4,
+            max_tokens=1000
+        )
+
+        self.llm_huggingface = HuggingFaceHub(
+            repo_id="tiiuae/falcon-7b-instruct",  # example; replace with your preferred model
+            huggingfacehub_api_token=st.secrets["HUGGINGFACEHUB_API_TOKEN"]
+        )
+
+        self.llm_deepseek = DeepSeek(
+            api_key=st.secrets["DEEPSEEK_API_KEY"],
+            model_name=st.secrets.get("DEEPSEEK_MODEL", "deepseek-chat"),
             temperature=0.4,
             max_tokens=1000
         )
@@ -85,19 +107,29 @@ class MultiPDFChatApp:
     def get_conversation_chain(self, question: str):
         if not question.strip():
             return "Please ask a valid question."
-        try:
-            if self.vectorstore:
-                chain = ConversationalRetrievalChain.from_llm(
-                    llm=self.llm,
-                    retriever=self.vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 4}),
-                    memory=self.memory,
-                    return_source_documents=False
-                )
-                response = chain.invoke({'question': question})
-                return response.get("answer", "Sorry, no answer could be generated.")
-            else:
-                return self.llm.invoke(question).content
-        except Exception as e:
-            if "rate_limit" in str(e).lower():
-                return "🚫 Groq API rate limit reached. Please wait a few minutes or upgrade your plan."
-            return f"💥 Error during response: {e}"
+
+        llm_candidates = [
+            ("Groq", self.llm_groq),
+            ("OpenAI", self.llm_openai),
+            ("HuggingFace", self.llm_huggingface),
+            ("DeepSeek", self.llm_deepseek)
+        ]
+
+        for provider_name, llm in llm_candidates:
+            try:
+                if self.vectorstore:
+                    chain = ConversationalRetrievalChain.from_llm(
+                        llm=llm,
+                        retriever=self.vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 4}),
+                        memory=self.memory,
+                        return_source_documents=False
+                    )
+                    response = chain.invoke({'question': question})
+                    return f"🤖 ({provider_name}) {response.get('answer', 'No answer.')}"
+                else:
+                    return f"🤖 ({provider_name}) {llm.invoke(question).content}"
+            except Exception as e:
+                print(f"❌ {provider_name} failed: {e}")
+                continue
+
+        return "🚫 All LLMs failed. Please check your API keys or try again later."

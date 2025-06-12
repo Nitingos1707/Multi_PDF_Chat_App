@@ -56,11 +56,13 @@ class MultiPDFChatApp:
             model_kwargs={'device': 'cpu'}
         )
 
-        # Use FAISS for compatibility with Streamlit Cloud
         self.vectorstore = FAISS.from_texts(
             texts=self.text_chunks,
             embedding=embeddings
         )
+
+        if not self.vectorstore:
+            raise ValueError("Vectorstore creation failed.")
 
         return self.vectorstore
 
@@ -100,10 +102,19 @@ class MultiPDFChatApp:
 
     def run_chat(self):
         try:
+            print("🔹 Extracting text...")
             self.get_pdf_text()
+            print("✅ Text length:", len(self.raw_text))
+
+            print("🔹 Splitting into chunks...")
             self.get_text_chunks()
+            print("✅ Chunks:", len(self.text_chunks))
+
+            print("🔹 Creating FAISS vectorstore...")
             self.get_vectorstore()
+            print("✅ Vectorstore created successfully.")
+
             return True
         except Exception as e:
-            print(f"Initialization failed: {e}")
+            print(f"❌ Initialization failed: {e}")
             return False

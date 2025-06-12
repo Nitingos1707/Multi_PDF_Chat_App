@@ -3,210 +3,127 @@ import torch
 from MultiPdfChatApp import MultiPDFChatApp
 import os
 
-# Ensure torch path is clear
+# Clear TorchScript path
 torch.classes.__path__ = []
 
-# Check API key configuration
+# Check and display API key configuration
 try:
-    # Check if API keys are properly set
     groq_key = st.secrets.get("GROQ_API_KEY", "")
     if not groq_key or groq_key == "your-groq-api-key":
         st.error("⚠️ Please set your actual GROQ_API_KEY in Streamlit Cloud secrets!")
-        st.info("Go to your Streamlit Cloud app settings → Secrets and add your API keys")
+        st.info("Go to Streamlit Cloud → Settings → Secrets to add your API key.")
         st.stop()
-    
-    # Debug info in sidebar
     st.sidebar.success("✅ API Key configured")
     st.sidebar.info(f"Model: {st.secrets.get('GROQ_MODEL', 'Not set')}")
-    
 except Exception as e:
-    st.error("❌ API keys not configured properly in Streamlit Cloud secrets")
+    st.error("❌ API keys not configured properly.")
     st.error(f"Error: {str(e)}")
     st.stop()
 
-# Initialize session state for chat history if not already exists
+# Initialize session state
 if 'chat_history' not in st.session_state:
     st.session_state.chat_history = []
 
-# Initialize session state for chat_app
 if 'chat_app' not in st.session_state:
     st.session_state.chat_app = None
 
-# Initialize session state for chat initialized flag
 if 'chat_initialized' not in st.session_state:
     st.session_state.chat_initialized = False
 
-# App header
-st.header('Multi-PDF Chat App')
+# Header
+st.header('📚 Multi-PDF Chat App')
 
-# Sidebar for file upload
+# Sidebar PDF uploader
 with st.sidebar:
-    st.write("Upload PDFs")
-    uploaded_files = st.file_uploader("Choose a PDF file", accept_multiple_files=True, type="pdf", key="pdf")
-    
+    st.write("📁 Upload your PDF files")
+    uploaded_files = st.file_uploader("Choose PDFs", accept_multiple_files=True, type="pdf")
+
     if uploaded_files:
-        st.success(f"✅ {len(uploaded_files)} file(s) uploaded successfully")
+        st.success(f"✅ {len(uploaded_files)} file(s) uploaded")
         for file in uploaded_files:
-            st.write(f"📄 {file.name} ({file.size/1024:.1f} KB)")
+            st.write(f"- {file.name} ({file.size/1024:.1f} KB)")
     else:
         st.warning("No files uploaded.")
 
 # Project name input
-project_name = None
-if uploaded_files:
-    st.write("Your Project Name")
-    project_name = st.text_input("Project Name", placeholder="Enter project name...")
+project_name = st.text_input("Project Name", placeholder="Enter project name...") if uploaded_files else None
 
-# Initialize chat app when button is clicked
-if project_name and uploaded_files and not st.session_state.chat_initialized:
-    if st.button("Start Chat"):
-        with st.spinner("Initializing App..."):
+# Start chat button
+if uploaded_files and project_name and not st.session_state.chat_initialized:
+    if st.button("🚀 Start Chat"):
+        with st.spinner("Initializing chat application..."):
             try:
-                # Create and store chat app in session state
                 st.session_state.chat_app = MultiPDFChatApp(project_name, uploaded_files)
-                
-                # Show detailed progress
+
                 progress_bar = st.progress(0)
                 status_text = st.empty()
-                
-                status_text.text("🔍 Analyzing PDF files...")
+
+                status_text.text("🔍 Processing PDFs...")
                 progress_bar.progress(25)
-                
-                status = st.session_state.chat_app.run_chat()
-                
-                if status is True:
+
+                success = st.session_state.chat_app.run_chat()
+
+                if success:
                     progress_bar.progress(100)
-                    status_text.text("✅ Initialization complete!")
+                    status_text.text("✅ Chat initialized successfully!")
                     st.session_state.chat_initialized = True
-                    st.success("🎉 Chat initialized successfully! You can now ask questions about your PDFs.")
                     st.rerun()
                 else:
-                    progress_bar.empty()
-                    status_text.empty()
                     st.error("❌ Chat initialization failed.")
-                    
-                    # Show debug information
                     with st.expander("Debug Information"):
-                        st.write("**Uploaded Files:**")
-                        for file in uploaded_files:
-                            st.write(f"- {file.name} ({file.size} bytes)")
-                        
-                        st.write("**Possible Issues:**")
-                        st.write("1. PDF might be image-based (scanned) rather than text-based")
-                        st.write("2. PDF might be corrupted or password-protected")
-                        st.write("3. PDF might be empty or contain no extractable text")
-                        st.write("4. Network issues with embedding model download")
-                        
-                        st.write("**Solutions:**")
-                        st.write("- Try a different PDF file")
-                        st.write("- Use a text-based PDF instead of scanned images")
-                        st.write("- Check if the PDF opens normally in a PDF viewer")
-                        
+                        st.write("Check for image-based PDFs or corrupted files.")
             except Exception as e:
-                st.error(f"An error occurred during initialization: {str(e)}")
-                
-                # Show specific error details
+                st.error("💥 Error during initialization")
                 with st.expander("Error Details"):
                     st.code(str(e))
-                    st.write("**Common Solutions:**")
-                    st.write("1. Refresh the page and try again")
-                    st.write("2. Upload a different PDF file")
-                    st.write("3. Check your internet connection")
-                    st.write("4. Ensure the PDF is not password-protected")
 
-# Show initialization status
+# Active chat
 if st.session_state.chat_initialized:
-    st.success("Chat is active - Ask questions about your PDFs below!")
+    st.success("Chat is active. Ask questions about your PDFs!")
 
-# Add some quick action buttons if chat is initialized
-if st.session_state.chat_initialized:
+    # Quick actions
     st.write("Quick Actions:")
     col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        if st.button("📝 Summarize"):
-            # Auto-add summarize question
-            if st.session_state.chat_app:
-                user_input = "Please provide a comprehensive summary of all the uploaded documents."
-                st.session_state.chat_history.append(("user", user_input))
-                
-                try:
-                    with st.spinner("Generating summary..."):
-                        response = st.session_state.chat_app.get_conversation_chain(user_input)
-                        if response and not response.startswith("Error:"):
-                            st.session_state.chat_history.append(("assistant", response))
-                        else:
-                            st.error(f"Failed to generate summary: {response}")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Error generating summary: {str(e)}")
-    
-    with col2:
-        if st.button("🔍 Key Points"):
-            if st.session_state.chat_app:
-                user_input = "What are the main key points and important findings from these documents?"
-                st.session_state.chat_history.append(("user", user_input))
-                
-                try:
-                    with st.spinner("Extracting key points..."):
-                        response = st.session_state.chat_app.get_conversation_chain(user_input)
-                        if response and not response.startswith("Error:"):
-                            st.session_state.chat_history.append(("assistant", response))
-                        else:
-                            st.error(f"Failed to extract key points: {response}")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Error extracting key points: {str(e)}")
-    
-    with col3:
-        if st.button("🔄 Reset Chat"):
-            st.session_state.chat_history = []
-            st.session_state.chat_app = None
-            st.session_state.chat_initialized = False
-            st.rerun()
-
-# Display Chat History
-for chat in st.session_state.chat_history:
-    role, message = chat
-    if role == "user":
-        st.chat_message("user").write(message)
-    else:
-        st.chat_message("assistant").write(message)
-
-# User Input Field
-if st.session_state.chat_app is not None and st.session_state.chat_initialized:
-    user_input = st.chat_input("Type your message...")
-    
-    if user_input:
-        # Append user message to chat history
+    if col1.button("📝 Summarize"):
+        user_input = "Summarize the uploaded documents."
         st.session_state.chat_history.append(("user", user_input))
-        
-        # Get AI response
-        try:
-            with st.spinner("Thinking..."):
-                response = st.session_state.chat_app.get_conversation_chain(user_input)
-                
-                if response and not response.startswith("Error:"):
-                    # Append AI response to chat history
-                    st.session_state.chat_history.append(("assistant", response))
-                else:
-                    st.error(f"Failed to get response: {response or 'Unknown error'}")
-                    # Still add the error to chat history for context
-                    st.session_state.chat_history.append(("assistant", f"Sorry, I encountered an error: {response or 'Unknown error'}"))
-                
-                # Rerun the app to refresh the interface
-                st.rerun()
-        except Exception as e:
-            error_msg = f"Error in getting response: {str(e)}"
-            st.error(error_msg)
-            st.session_state.chat_history.append(("assistant", f"Sorry, I encountered an error: {str(e)}"))
-            st.rerun()
+        with st.spinner("Generating summary..."):
+            response = st.session_state.chat_app.get_conversation_chain(user_input)
+            st.session_state.chat_history.append(("assistant", response))
+        st.rerun()
 
-elif project_name and uploaded_files:
-    st.info("👆 Click 'Start Chat' above to begin chatting with your PDFs")
+    if col2.button("🔍 Key Points"):
+        user_input = "What are the key points of the documents?"
+        st.session_state.chat_history.append(("user", user_input))
+        with st.spinner("Extracting key points..."):
+            response = st.session_state.chat_app.get_conversation_chain(user_input)
+            st.session_state.chat_history.append(("assistant", response))
+        st.rerun()
+
+    if col3.button("🔄 Reset Chat"):
+        st.session_state.chat_history = []
+        st.session_state.chat_app = None
+        st.session_state.chat_initialized = False
+        st.rerun()
+
+# Chat history display
+for role, message in st.session_state.chat_history:
+    st.chat_message(role).write(message)
+
+# User input
+if st.session_state.chat_app:
+    user_input = st.chat_input("Ask a question...")
+    if user_input:
+        st.session_state.chat_history.append(("user", user_input))
+        with st.spinner("Thinking..."):
+            response = st.session_state.chat_app.get_conversation_chain(user_input)
+            st.session_state.chat_history.append(("assistant", response))
+        st.rerun()
+elif uploaded_files and project_name:
+    st.info("⬆️ Click 'Start Chat' above to begin.")
 else:
-    st.info("👈 Please upload PDF files and enter a project name to get started")
+    st.info("👈 Upload PDFs and enter a project name to begin.")
 
 # Footer
 st.markdown("---")
-st.markdown("💡 **Tip**: Upload multiple PDFs to ask questions across all documents!")
+st.markdown("💡 Tip: Upload multiple PDFs to ask questions across all documents.")

@@ -94,7 +94,10 @@ if user_input:
 
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
-            response = st.session_state.chat_app.get_conversation_chain(user_input)
+            try:
+                response = st.session_state.chat_app.get_conversation_chain(user_input)
+            except Exception as e:
+                response = f"💥 Error during response: {e}"
             st.write(response)
 
     st.session_state.chat_history.append(("assistant", response))

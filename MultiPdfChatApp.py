@@ -2,7 +2,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
-from langchain_community.vectorstores import Chroma
+from langchain_chroma import Chroma
 from langchain_groq.chat_models import ChatGroq
 from PyPDF2 import PdfReader
 import streamlit as st

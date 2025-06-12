@@ -14,7 +14,7 @@ if 'chat_app' not in st.session_state:
     st.session_state.chat_app = None
 
 # App header
-st.header('Multi-PDF Chat App', divider='rainbow')
+st.header('Multi-PDF Chat App')
 
 # Sidebar for file upload
 with st.sidebar:

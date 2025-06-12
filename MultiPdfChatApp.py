@@ -3,7 +3,7 @@ from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 from langchain.vectorstores import FAISS
-from langchain_groq.chat_models import ChatGroq
+from langchain_community.chat_models import ChatDeepSeek  # ✅ DeepSeek
 from PyPDF2 import PdfReader
 import streamlit as st
 import tiktoken
@@ -19,9 +19,10 @@ class MultiPDFChatApp:
         self.vectorstore = None
         self.chunk_hashes = set()
 
-        self.llm = ChatGroq(
-            api_key=st.secrets["GROQ_API_KEY"],
-            model_name=st.secrets.get("GROQ_MODEL", "mixtral-8x7b-32768"),
+        # ✅ Use DeepSeek as primary LLM
+        self.llm = ChatDeepSeek(
+            api_key=st.secrets["DEEPSEEK_API_KEY"],
+            model_name=st.secrets.get("DEEPSEEK_MODEL", "deepseek-chat"),
             temperature=0.4,
             max_tokens=1000
         )
@@ -124,4 +125,3 @@ class MultiPDFChatApp:
                 return self.llm.invoke(question).content
         except Exception as e:
             return f"Error during response generation: {str(e)}"
-

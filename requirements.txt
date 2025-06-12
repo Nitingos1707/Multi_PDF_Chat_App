@@ -157,5 +157,4 @@ zstandard
 # ✅ FAISS for vectorstore persistence
 faiss-cpu
 
-# ✅ Gemini / Google Generative AI support
-langchain-google-genai
+

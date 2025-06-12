@@ -45,22 +45,26 @@ with st.sidebar:
                 st.progress((i + 1) / len(new_files))
             st.success("✅ PDFs added!")
 
-# Display history
+# Show full chat history
 for role, message in st.session_state.chat_history:
     st.chat_message(role).write(message)
 
-# Input field
+# Chat input
 user_input = st.chat_input("Ask a question...")
 
 if user_input:
+    # Display user message immediately
+    st.chat_message("user").write(user_input)
     st.session_state.chat_history.append(("user", user_input))
+
+    # Assistant responds
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             response = st.session_state.chat_app.get_conversation_chain(user_input)
             st.write(response)
     st.session_state.chat_history.append(("assistant", response))
 
-# Reset chat
+# Reset option
 if st.sidebar.button("🔄 Reset Chat"):
     st.session_state.chat_history = []
     st.session_state.chat_app = MultiPDFChatApp(project_name="default")

@@ -6,7 +6,7 @@ from langchain.vectorstores import FAISS
 from langchain_groq.chat_models import ChatGroq
 from langchain.chat_models import ChatOpenAI
 from langchain.llms import HuggingFaceHub
-from langchain.llms import DeepSeek
+# from langchain.llms import DeepSeek
 from PyPDF2 import PdfReader
 import streamlit as st
 import tiktoken
@@ -41,12 +41,12 @@ class MultiPDFChatApp:
             huggingfacehub_api_token=st.secrets["HUGGINGFACEHUB_API_TOKEN"]
         )
 
-        self.llm_deepseek = DeepSeek(
-            api_key=st.secrets["DEEPSEEK_API_KEY"],
-            model_name=st.secrets.get("DEEPSEEK_MODEL", "deepseek-chat"),
-            temperature=0.4,
-            max_tokens=1000
-        )
+        # self.llm_deepseek = DeepSeek(
+        #     api_key=st.secrets["DEEPSEEK_API_KEY"],
+        #     model_name=st.secrets.get("DEEPSEEK_MODEL", "deepseek-chat"),
+        #     temperature=0.4,
+        #     max_tokens=1000
+        # )
 
         self.memory = ConversationBufferMemory(
             memory_key="chat_history",
@@ -112,7 +112,7 @@ class MultiPDFChatApp:
             ("Groq", self.llm_groq),
             ("OpenAI", self.llm_openai),
             ("HuggingFace", self.llm_huggingface),
-            ("DeepSeek", self.llm_deepseek)
+            # ("DeepSeek", self.llm_deepseek)
         ]
 
         for provider_name, llm in llm_candidates:

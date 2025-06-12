@@ -64,16 +64,55 @@ if project_name and uploaded_files and not st.session_state.chat_initialized:
             try:
                 # Create and store chat app in session state
                 st.session_state.chat_app = MultiPDFChatApp(project_name, uploaded_files)
+                
+                # Show detailed progress
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                
+                status_text.text("🔍 Analyzing PDF files...")
+                progress_bar.progress(25)
+                
                 status = st.session_state.chat_app.run_chat()
                 
                 if status is True:
+                    progress_bar.progress(100)
+                    status_text.text("✅ Initialization complete!")
                     st.session_state.chat_initialized = True
                     st.success("🎉 Chat initialized successfully! You can now ask questions about your PDFs.")
                     st.rerun()
                 else:
-                    st.error("❌ Chat initialization failed. Please check the uploaded files.")
+                    progress_bar.empty()
+                    status_text.empty()
+                    st.error("❌ Chat initialization failed.")
+                    
+                    # Show debug information
+                    with st.expander("Debug Information"):
+                        st.write("**Uploaded Files:**")
+                        for file in uploaded_files:
+                            st.write(f"- {file.name} ({file.size} bytes)")
+                        
+                        st.write("**Possible Issues:**")
+                        st.write("1. PDF might be image-based (scanned) rather than text-based")
+                        st.write("2. PDF might be corrupted or password-protected")
+                        st.write("3. PDF might be empty or contain no extractable text")
+                        st.write("4. Network issues with embedding model download")
+                        
+                        st.write("**Solutions:**")
+                        st.write("- Try a different PDF file")
+                        st.write("- Use a text-based PDF instead of scanned images")
+                        st.write("- Check if the PDF opens normally in a PDF viewer")
+                        
             except Exception as e:
                 st.error(f"An error occurred during initialization: {str(e)}")
+                
+                # Show specific error details
+                with st.expander("Error Details"):
+                    st.code(str(e))
+                    st.write("**Common Solutions:**")
+                    st.write("1. Refresh the page and try again")
+                    st.write("2. Upload a different PDF file")
+                    st.write("3. Check your internet connection")
+                    st.write("4. Ensure the PDF is not password-protected")
 
 # Show initialization status
 if st.session_state.chat_initialized:

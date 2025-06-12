@@ -15,7 +15,8 @@ class MultiPDFChatApp:
         torch.classes.__path__ = []
         base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Storage")
         os.makedirs(base_dir, exist_ok=True)
-        self.chroma_persist_dir = f"{base_dir}/{project_name}_chroma_db"
+
+        # Removed chroma_persist_dir since we are not persisting on Streamlit Cloud
         self.pdf_docs = pdf_docs
         self.project_name = project_name
         self.raw_text = ""
@@ -51,15 +52,17 @@ class MultiPDFChatApp:
         return self.text_chunks
 
     def get_vectorstore(self):
-        embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2", model_kwargs={'device': 'cpu'})
-        if os.path.exists(self.chroma_persist_dir) and os.listdir(self.chroma_persist_dir):
-            self.vectorstore = Chroma(persist_directory=self.chroma_persist_dir, embedding_function=embeddings)
-            existing = self.vectorstore.get(include=["documents"])["documents"]
-            new_docs = [doc for doc in self.text_chunks if doc not in existing]
-            if new_docs:
-                self.vectorstore.add_texts(new_docs)
-        else:
-            self.vectorstore = Chroma.from_texts(texts=self.text_chunks, embedding=embeddings, persist_directory=self.chroma_persist_dir)
+        embeddings = HuggingFaceEmbeddings(
+            model_name="sentence-transformers/all-MiniLM-L6-v2",
+            model_kwargs={'device': 'cpu'}
+        )
+
+        # Use in-memory vectorstore (no persistence for Streamlit Cloud)
+        self.vectorstore = Chroma.from_texts(
+            texts=self.text_chunks,
+            embedding=embeddings
+        )
+
         return self.vectorstore
 
     def get_conversation_chain(self, question: str):
@@ -77,13 +80,22 @@ class MultiPDFChatApp:
         except Exception as e:
             return f"Error loading model: {e}"
 
-        memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True, output_key="answer")
+        memory = ConversationBufferMemory(
+            memory_key="chat_history",
+            return_messages=True,
+            output_key="answer"
+        )
+
         chain = ConversationalRetrievalChain.from_llm(
             llm=llm,
-            retriever=self.vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 4}),
+            retriever=self.vectorstore.as_retriever(
+                search_type="similarity",
+                search_kwargs={"k": 4}
+            ),
             memory=memory,
             return_source_documents=False
         )
+
         response = chain.invoke({'question': question})
         return response.get("answer", "Sorry, no answer could be generated.")
 

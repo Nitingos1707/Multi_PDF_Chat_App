@@ -1,32 +1,9 @@
 import streamlit as st
 import torch
 from MultiPdfChatApp import MultiPDFChatApp
-import os
 
 # Ensure torch path is clear
 torch.classes.__path__ = []
-
-# Load secrets from Streamlit Cloud
-OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY", None)
-HUGGINGFACEHUB_API_TOKEN = st.secrets.get("HUGGINGFACEHUB_API_TOKEN", None)
-GROQ_API_KEY = st.secrets.get("GROQ_API_KEY", None)
-GROQ_MODEL = st.secrets.get("GROQ_MODEL", None)
-DEEPSEEK_API_KEY = st.secrets.get("DEEPSEEK_API_KEY", None)
-DEEPSEEK_MODEL = st.secrets.get("DEEPSEEK_MODEL", None)
-
-# Optionally set as environment variables for compatibility
-if OPENAI_API_KEY:
-    os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
-if HUGGINGFACEHUB_API_TOKEN:
-    os.environ["HUGGINGFACEHUB_API_TOKEN"] = HUGGINGFACEHUB_API_TOKEN
-if GROQ_API_KEY:
-    os.environ["GROQ_API_KEY"] = GROQ_API_KEY
-if GROQ_MODEL:
-    os.environ["GROQ_MODEL"] = GROQ_MODEL
-if DEEPSEEK_API_KEY:
-    os.environ["DEEPSEEK_API_KEY"] = DEEPSEEK_API_KEY
-if DEEPSEEK_MODEL:
-    os.environ["DEEPSEEK_MODEL"] = DEEPSEEK_MODEL
 
 # Initialize session state for chat history if not already exists
 if 'chat_history' not in st.session_state:

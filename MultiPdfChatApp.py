@@ -82,34 +82,9 @@ class MultiPDFChatApp:
             print(f"❌ Initialization failed: {e}")
             return False
 
-    def add_new_pdfs(self, new_pdfs: list):
-        try:
-            self.pdf_docs += new_pdfs
-            new_texts = self.get_pdf_text(new_pdfs)
-            new_chunks = self.get_text_chunks(new_texts)
-
-            if not new_chunks:
-                print("⚠️ No new chunks found in uploaded PDFs.")
-                return
-
-            embeddings = HuggingFaceEmbeddings(
-                model_name="sentence-transformers/all-MiniLM-L6-v2",
-                model_kwargs={'device': 'cpu'}
-            )
-
-            if not self.vectorstore:
-                self.vectorstore = FAISS.from_texts(new_chunks, embedding=embeddings)
-            else:
-                self.vectorstore.add_texts(new_chunks, embedding=embeddings)
-
-            print(f"✅ Added {len(new_chunks)} new chunks.")
-        except Exception as e:
-            print(f"❌ Failed to add new PDFs: {e}")
-
     def get_conversation_chain(self, question: str):
         if not question.strip():
             return "Please ask a valid question."
-
         try:
             if self.vectorstore:
                 chain = ConversationalRetrievalChain.from_llm(
@@ -123,4 +98,6 @@ class MultiPDFChatApp:
             else:
                 return self.llm.invoke(question).content
         except Exception as e:
-            return f"Error during response generation: {str(e)}"
+            if "rate_limit" in str(e).lower():
+                return "🚫 Groq API rate limit reached. Please wait a few minutes or upgrade your plan."
+            return f"💥 Error during response: {e}"

@@ -37,7 +37,7 @@ class MultiPDFChatApp:
         )
 
         self.llm_huggingface = HuggingFaceHub(
-            repo_id="tiiuae/falcon-7b-instruct",  # example; replace with your preferred model
+            repo_id="tiiuae/falcon-7b-instruct",
             huggingfacehub_api_token=st.secrets["HUGGINGFACEHUB_API_TOKEN"]
         )
 
@@ -127,7 +127,14 @@ class MultiPDFChatApp:
                     response = chain.invoke({'question': question})
                     return f"🤖 ({provider_name}) {response.get('answer', 'No answer.')}"
                 else:
-                    return f"🤖 ({provider_name}) {llm.invoke(question).content}"
+                    try:
+                        # Use invoke if available
+                        result = llm.invoke(question)
+                        answer = result.content if hasattr(result, "content") else str(result)
+                    except Exception:
+                        # Fallback to predict
+                        answer = llm.predict(question)
+                    return f"🤖 ({provider_name}) {answer}"
             except Exception as e:
                 print(f"❌ {provider_name} failed: {e}")
                 continue

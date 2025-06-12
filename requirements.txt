@@ -51,11 +51,12 @@ jsonschema
 jsonschema-specifications
 kubernetes
 langchain
-langchain-community
 langchain-core
+langchain-community
 langchain-groq
 langchain-huggingface
 langchain-text-splitters
+langchain-google-genai
 langsmith
 markdown-it-py
 MarkupSafe
@@ -153,5 +154,8 @@ yarl
 zipp
 zstandard
 
-# ✅ Added for vectorstore support
+# ✅ FAISS for vectorstore persistence
 faiss-cpu
+
+# ✅ Gemini / Google Generative AI support
+langchain-google-genai

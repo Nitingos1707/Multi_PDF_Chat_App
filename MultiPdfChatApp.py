@@ -94,62 +94,24 @@ class MultiPDFChatApp:
             return None
     
     def get_conversation_chain(self, question):
-        try:
-            # Initialize persistent memory and conversation chain if not already done
-            if not hasattr(self, '_memory') or not hasattr(self, '_conversation_chain'):
-                # Initialize memory once (persists across function calls)
-                self._memory = ConversationBufferMemory(
-                    memory_key="chat_history", 
-                    return_messages=True,
-                    output_key='answer'
-                )
-                
-                # Convert to LangChain compatible LLM
-                llm = ChatGroq(
-                    api_key=os.getenv("GROQ_API_KEY"),
-                    model=os.getenv("GROQ_MODEL"),
-                    temperature=0.4
-                ) 
-                
-                # Configure retriever with similarity search and k=5
-                retriever = self.vectorstore.as_retriever(
-                    search_type="similarity",
-                    search_kwargs={"k": 5}
-                )
-                
-                # Create conversation chain with persistent memory
-                self._conversation_chain = ConversationalRetrievalChain.from_llm(
-                    llm=llm,
-                    retriever=retriever,
-                    memory=self._memory
-                )
-            
-            # Use the persistent conversation chain
-            response = self._conversation_chain.invoke({'question': question})
+        try:            
+            # Convert to LangChain compatible LLM
+            llm = ChatGroq(
+                api_key=os.getenv("GROQ_API_KEY"),
+                model=os.getenv("GROQ_MODEL"),
+                temperature=0.4
+            )        
+            memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+            conversation_chain = ConversationalRetrievalChain.from_llm(
+                llm=llm,
+                retriever=self.vectorstore.as_retriever(),
+                memory=memory
+            )
+            response = conversation_chain.invoke({'question': question})
             return response['answer']
-            
         except Exception as e:
             print(f"Error handling conversation chain: {e}")
             return None
-
-    # Optional: Add a method to clear memory if needed
-    def clear_conversation_memory(self):
-        """Clear the conversation memory"""
-        if hasattr(self, '_memory'):
-            self._memory.clear()
-            print("Conversation memory cleared.")
-
-    # Optional: Add a method to get conversation history
-    def get_conversation_history(self):
-        """Get the current conversation history"""
-        if hasattr(self, '_memory'):
-            messages = self._memory.chat_memory.messages
-            history = []
-            for i, message in enumerate(messages):
-                role = "User" if i % 2 == 0 else "Assistant"
-                history.append(f"{role}: {message.content}")
-            return "\n".join(history)
-        return "No conversation history available."
     
     def run_chat(self):
         try:

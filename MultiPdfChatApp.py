@@ -3,7 +3,7 @@ from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 from langchain.vectorstores import FAISS
-from langchain_community.chat_models import ChatDeepSeek  # ✅ DeepSeek
+from langchain.llms import HuggingFaceHub
 from PyPDF2 import PdfReader
 import streamlit as st
 import tiktoken
@@ -19,12 +19,15 @@ class MultiPDFChatApp:
         self.vectorstore = None
         self.chunk_hashes = set()
 
-        # ✅ Use DeepSeek as primary LLM
-        self.llm = ChatDeepSeek(
-            api_key=st.secrets["DEEPSEEK_API_KEY"],
-            model_name=st.secrets.get("DEEPSEEK_MODEL", "deepseek-chat"),
-            temperature=0.4,
-            max_tokens=1000
+        # ✅ Load DeepSeek via Hugging Face Hub
+        self.llm = HuggingFaceHub(
+            repo_id=st.secrets.get("DEEPSEEK_MODEL", "deepseek-ai/deepseek-llm-7b-instruct"),
+            huggingfacehub_api_token=st.secrets["HUGGINGFACEHUB_API_TOKEN"],
+            model_kwargs={
+                "temperature": 0.4,
+                "max_new_tokens": 1000,
+                "do_sample": False
+            }
         )
 
         self.memory = ConversationBufferMemory(
@@ -122,6 +125,6 @@ class MultiPDFChatApp:
                 response = chain.invoke({'question': question})
                 return response.get("answer", "Sorry, no answer could be generated.")
             else:
-                return self.llm.invoke(question).content
+                return self.llm.invoke(question)
         except Exception as e:
             return f"Error during response generation: {str(e)}"

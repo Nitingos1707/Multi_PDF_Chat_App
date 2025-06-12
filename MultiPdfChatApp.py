@@ -19,10 +19,10 @@ class MultiPDFChatApp:
         self.vectorstore = None
         self.chunk_hashes = set()
 
-        # ✅ Groq LLM initialization
+        # ✅ Groq with llama-3.3-70b-versatile
         self.llm = ChatGroq(
             api_key=st.secrets["GROQ_API_KEY"],
-            model_name=st.secrets.get("GROQ_MODEL", "llama3-8b-8192"),  # Default to LLaMA 3
+            model_name=st.secrets.get("GROQ_MODEL", "llama-3.3-70b-versatile"),
             temperature=0.4,
             max_tokens=1000
         )

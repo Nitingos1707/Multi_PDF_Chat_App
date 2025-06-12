@@ -2,7 +2,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
-from langchain_chroma import Chroma
+from langchain.vectorstores import FAISS
 from langchain_groq.chat_models import ChatGroq
 from PyPDF2 import PdfReader
 import streamlit as st
@@ -16,7 +16,6 @@ class MultiPDFChatApp:
         base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Storage")
         os.makedirs(base_dir, exist_ok=True)
 
-        # Removed chroma_persist_dir since we are not persisting on Streamlit Cloud
         self.pdf_docs = pdf_docs
         self.project_name = project_name
         self.raw_text = ""
@@ -57,8 +56,8 @@ class MultiPDFChatApp:
             model_kwargs={'device': 'cpu'}
         )
 
-        # Use in-memory vectorstore (no persistence for Streamlit Cloud)
-        self.vectorstore = Chroma.from_texts(
+        # Use FAISS for compatibility with Streamlit Cloud
+        self.vectorstore = FAISS.from_texts(
             texts=self.text_chunks,
             embedding=embeddings
         )

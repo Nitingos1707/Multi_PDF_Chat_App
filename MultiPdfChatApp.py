@@ -8,16 +8,16 @@ from PyPDF2 import PdfReader
 import streamlit as st
 import tiktoken
 import torch
-import os
+import hashlib
 
 class MultiPDFChatApp:
     def __init__(self, project_name: str, pdf_docs: list = []):
         torch.classes.__path__ = []
         self.project_name = project_name
         self.pdf_docs = pdf_docs
-        self.raw_text = ""
         self.text_chunks = []
         self.vectorstore = None
+        self.chunk_hashes = set()
 
         self.llm = ChatGroq(
             api_key=st.secrets["GROQ_API_KEY"],
@@ -32,20 +32,21 @@ class MultiPDFChatApp:
             output_key="answer"
         )
 
+    def hash_text(self, text):
+        return hashlib.md5(text.encode('utf-8')).hexdigest()
+
     def get_pdf_text(self, pdfs):
-        raw_text = ""
+        raw_texts = []
         for pdf in pdfs:
             pdf.seek(0)
             reader = PdfReader(pdf)
-            for page_num, page in enumerate(reader.pages):
+            for page in reader.pages:
                 text = page.extract_text()
                 if text and text.strip():
-                    raw_text += f"\n--- {pdf.name} (Page {page_num + 1}) ---\n{text}\n"
-        if not raw_text.strip():
-            raise ValueError("No extractable text found in PDFs.")
-        return raw_text
+                    raw_texts.append(text)
+        return raw_texts
 
-    def get_text_chunks(self, text):
+    def get_text_chunks(self, texts):
         encoding = tiktoken.get_encoding("cl100k_base")
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
@@ -53,7 +54,15 @@ class MultiPDFChatApp:
             length_function=lambda t: len(encoding.encode(t)),
             separators=["\n\n", "\n", " ", ""]
         )
-        return splitter.split_text(text)
+        all_chunks = []
+        for text in texts:
+            chunks = splitter.split_text(text)
+            for chunk in chunks:
+                chunk_hash = self.hash_text(chunk)
+                if chunk_hash not in self.chunk_hashes:
+                    self.chunk_hashes.add(chunk_hash)
+                    all_chunks.append(chunk)
+        return all_chunks
 
     def build_vectorstore(self, chunks):
         embeddings = HuggingFaceEmbeddings(
@@ -64,21 +73,38 @@ class MultiPDFChatApp:
 
     def run_chat(self):
         try:
-            print("🔹 Extracting text...")
-            self.raw_text = self.get_pdf_text(self.pdf_docs)
-            print("✅ Text length:", len(self.raw_text))
-
-            print("🔹 Splitting into chunks...")
-            self.text_chunks = self.get_text_chunks(self.raw_text)
-            print("✅ Chunks:", len(self.text_chunks))
-
-            print("🔹 Creating FAISS vectorstore...")
-            self.vectorstore = self.build_vectorstore(self.text_chunks)
-            print("✅ Vectorstore ready.")
+            texts = self.get_pdf_text(self.pdf_docs)
+            self.text_chunks = self.get_text_chunks(texts)
+            if self.text_chunks:
+                self.vectorstore = self.build_vectorstore(self.text_chunks)
             return True
         except Exception as e:
             print(f"❌ Initialization failed: {e}")
             return False
+
+    def add_new_pdfs(self, new_pdfs: list):
+        try:
+            self.pdf_docs += new_pdfs
+            new_texts = self.get_pdf_text(new_pdfs)
+            new_chunks = self.get_text_chunks(new_texts)
+
+            if not new_chunks:
+                print("⚠️ No new chunks found in uploaded PDFs.")
+                return
+
+            embeddings = HuggingFaceEmbeddings(
+                model_name="sentence-transformers/all-MiniLM-L6-v2",
+                model_kwargs={'device': 'cpu'}
+            )
+
+            if not self.vectorstore:
+                self.vectorstore = FAISS.from_texts(new_chunks, embedding=embeddings)
+            else:
+                self.vectorstore.add_texts(new_chunks, embedding=embeddings)
+
+            print(f"✅ Added {len(new_chunks)} new chunks.")
+        except Exception as e:
+            print(f"❌ Failed to add new PDFs: {e}")
 
     def get_conversation_chain(self, question: str):
         if not question.strip():
@@ -95,24 +121,6 @@ class MultiPDFChatApp:
                 response = chain.invoke({'question': question})
                 return response.get("answer", "Sorry, no answer could be generated.")
             else:
-                # No PDFs: fallback to general LLM
                 return self.llm.invoke(question).content
         except Exception as e:
             return f"Error during response generation: {str(e)}"
-
-    def add_new_pdfs(self, new_pdfs: list):
-        try:
-            self.pdf_docs += new_pdfs
-            new_text = self.get_pdf_text(new_pdfs)
-            new_chunks = self.get_text_chunks(new_text)
-            embeddings = HuggingFaceEmbeddings(
-                model_name="sentence-transformers/all-MiniLM-L6-v2",
-                model_kwargs={'device': 'cpu'}
-            )
-            if not self.vectorstore:
-                self.vectorstore = FAISS.from_texts(new_chunks, embedding=embeddings)
-            else:
-                self.vectorstore.add_texts(new_chunks, embedding=embeddings)
-            print(f"✅ Added {len(new_chunks)} new chunks.")
-        except Exception as e:
-            print(f"❌ Failed to add new PDFs: {e}")

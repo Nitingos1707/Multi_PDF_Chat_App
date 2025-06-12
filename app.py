@@ -30,29 +30,22 @@ if 'chat_app' not in st.session_state:
 if 'chat_initialized' not in st.session_state:
     st.session_state.chat_initialized = False
 
-if "upload_queue" not in st.session_state:
-    st.session_state.upload_queue = []
-
 # Header
 st.header('📚 Multi-PDF Chat App')
 
-# Sidebar uploader (just queues files)
+# Sidebar PDF uploader (dynamic)
 with st.sidebar:
-    st.write("📁 Upload PDFs (chat will remain active)")
+    st.write("📁 Upload or add PDF files")
     new_files = st.file_uploader("Choose PDFs", accept_multiple_files=True, type="pdf")
+
     if new_files:
-        for f in new_files:
-            st.session_state.upload_queue.append(f)
-        st.success(f"📥 Queued {len(new_files)} file(s) for processing.")
+        with st.spinner("Processing new PDFs..."):
+            for i, pdf in enumerate(new_files):
+                st.session_state.chat_app.add_new_pdfs([pdf])
+                st.progress((i + 1) / len(new_files))
+            st.success("✅ PDFs added!")
 
-# Background PDF processing (1 per run)
-if st.session_state.upload_queue:
-    with st.spinner("🔄 Processing uploaded PDF..."):
-        pdf = st.session_state.upload_queue.pop(0)
-        st.session_state.chat_app.add_new_pdfs([pdf])
-        st.toast(f"✅ {pdf.name} processed!")
-
-# Display chat history
+# Show full chat history
 for role, message in st.session_state.chat_history:
     st.chat_message(role).write(message)
 
@@ -60,24 +53,24 @@ for role, message in st.session_state.chat_history:
 user_input = st.chat_input("Ask a question...")
 
 if user_input:
+    # Display user message immediately
     st.chat_message("user").write(user_input)
     st.session_state.chat_history.append(("user", user_input))
 
+    # Assistant responds
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             response = st.session_state.chat_app.get_conversation_chain(user_input)
             st.write(response)
-
     st.session_state.chat_history.append(("assistant", response))
 
-# Reset button
+# Reset option
 if st.sidebar.button("🔄 Reset Chat"):
     st.session_state.chat_history = []
     st.session_state.chat_app = MultiPDFChatApp(project_name="default")
     st.session_state.chat_initialized = False
-    st.session_state.upload_queue = []
     st.rerun()
 
 # Footer
 st.markdown("---")
-st.markdown("💡 Tip: You can keep chatting while PDFs are being processed in the background.")
+st.markdown("💡 Tip: You can upload more PDFs anytime during the chat.")

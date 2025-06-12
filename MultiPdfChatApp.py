@@ -41,22 +41,51 @@ class MultiPDFChatApp:
         print("Extracting text from PDFs...")
         
         try:
+            if not self.pdf_docs:
+                raise ValueError("No PDF files provided")
+            
             for i, pdf in enumerate(self.pdf_docs):
                 print(f"Extracting text from PDF {i+1}: {pdf.name}")
-                pdf_reader = PdfReader(pdf)
                 
-                for page_num, page in enumerate(pdf_reader.pages):
+                try:
+                    # Reset file pointer to beginning
+                    pdf.seek(0)
+                    pdf_reader = PdfReader(pdf)
+                    
+                    print(f"PDF has {len(pdf_reader.pages)} pages")
+                    
+                    for page_num, page in enumerate(pdf_reader.pages):
+                        try:
+                            page_text = page.extract_text()
+                            if page_text and page_text.strip():  # Only add non-empty pages
+                                self.raw_text += f"\n--- Document: {pdf.name} (Page {page_num + 1}) ---\n"
+                                self.raw_text += page_text + "\n"
+                                print(f"Extracted {len(page_text)} characters from page {page_num + 1}")
+                        except Exception as e:
+                            print(f"Error extracting text from page {page_num + 1} of {pdf.name}: {e}")
+                            continue
+                            
+                except Exception as e:
+                    print(f"Error reading PDF {pdf.name}: {e}")
+                    # Try alternative approach
                     try:
-                        page_text = page.extract_text()
-                        if page_text.strip():  # Only add non-empty pages
-                            self.raw_text += f"\n--- Document: {pdf.name} (Page {page_num + 1}) ---\n"
-                            self.raw_text += page_text + "\n"
-                    except Exception as e:
-                        print(f"Error extracting text from page {page_num + 1} of {pdf.name}: {e}")
+                        import PyPDF2
+                        pdf.seek(0)
+                        pdf_reader = PyPDF2.PdfReader(pdf)
+                        for page_num, page in enumerate(pdf_reader.pages):
+                            try:
+                                page_text = page.extract_text()
+                                if page_text and page_text.strip():
+                                    self.raw_text += f"\n--- Document: {pdf.name} (Page {page_num + 1}) ---\n"
+                                    self.raw_text += page_text + "\n"
+                            except:
+                                continue
+                    except Exception as e2:
+                        print(f"Alternative PDF reading also failed for {pdf.name}: {e2}")
                         continue
             
             if not self.raw_text.strip():
-                raise ValueError("No text could be extracted from the PDF files")
+                raise ValueError("No text could be extracted from any of the PDF files. The PDFs might be image-based or corrupted.")
                 
             print(f"Text extraction completed. Total characters: {len(self.raw_text)}")
             return self.raw_text
@@ -235,27 +264,50 @@ class MultiPDFChatApp:
         try:
             print("Starting chat initialization...")
             
+            # Debug: Check if PDFs are available
+            if not self.pdf_docs:
+                raise Exception("No PDF documents provided")
+            
+            print(f"Processing {len(self.pdf_docs)} PDF file(s)")
+            for i, pdf in enumerate(self.pdf_docs):
+                print(f"PDF {i+1}: {pdf.name} ({pdf.size} bytes)")
+            
             # Step 1: Extract text from PDFs
+            print("Step 1: Extracting text from PDFs...")
             self.get_pdf_text()
             if not self.raw_text:
-                raise Exception("No text extracted from PDFs")
+                raise Exception("No text extracted from PDFs - files might be image-based or corrupted")
+            print(f"✅ Text extraction successful: {len(self.raw_text)} characters")
             
             # Step 2: Split text into chunks
+            print("Step 2: Splitting text into chunks...")
             self.get_text_chunks()
             if not self.text_chunks:
-                raise Exception("No text chunks created")
+                raise Exception("No text chunks created - text might be too short")
+            print(f"✅ Text chunking successful: {len(self.text_chunks)} chunks")
             
             # Step 3: Create vectorstore
+            print("Step 3: Creating vectorstore...")
             self.get_vectorstore()
             if not self.vectorstore:
-                raise Exception("Vectorstore creation failed")
+                raise Exception("Vectorstore creation failed - check embeddings")
+            print("✅ Vectorstore creation successful")
             
-            print("Chat initialization completed successfully.")
+            print("🎉 Chat initialization completed successfully.")
             return True
             
         except Exception as e:
-            error_msg = f"Error in chat initialization: {str(e)}"
+            error_msg = f"❌ Error in chat initialization: {str(e)}"
             print(error_msg)
+            
+            # More specific error messages
+            if "No text extracted" in str(e):
+                print("💡 Suggestion: Your PDF might be image-based. Try using OCR tools to convert it to text-based PDF first.")
+            elif "No PDF documents" in str(e):
+                print("💡 Suggestion: Make sure PDF files are properly uploaded.")
+            elif "Vectorstore creation failed" in str(e):
+                print("💡 Suggestion: There might be an issue with the embedding model or storage.")
+            
             return False
     
     def reset_chat(self):

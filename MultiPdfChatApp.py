@@ -10,6 +10,7 @@ import tiktoken
 import torch
 import hashlib
 
+
 class MultiPDFChatApp:
     def __init__(self, project_name: str, pdf_docs: list = []):
         torch.classes.__path__ = []
@@ -19,7 +20,7 @@ class MultiPDFChatApp:
         self.vectorstore = None
         self.chunk_hashes = set()
 
-        # ✅ Groq with llama-3.3-70b-versatile
+        # ✅ LLM setup with Groq
         self.llm = ChatGroq(
             api_key=st.secrets["GROQ_API_KEY"],
             model_name=st.secrets.get("GROQ_MODEL", "llama-3.3-70b-versatile"),
@@ -41,13 +42,14 @@ class MultiPDFChatApp:
         for pdf in pdfs:
             pdf.seek(0)
             reader = PdfReader(pdf)
+            pdf_name = getattr(pdf, "name", "unknown.pdf")
             for page in reader.pages:
                 text = page.extract_text()
                 if text and text.strip():
-                    raw_texts.append(text)
+                    raw_texts.append((text, pdf_name))
         return raw_texts
 
-    def get_text_chunks(self, texts):
+    def get_text_chunks(self, texts_with_sources):
         encoding = tiktoken.get_encoding("cl100k_base")
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
@@ -56,13 +58,16 @@ class MultiPDFChatApp:
             separators=["\n\n", "\n", " ", ""]
         )
         all_chunks = []
-        for text in texts:
+        for text, source in texts_with_sources:
             chunks = splitter.split_text(text)
             for chunk in chunks:
                 chunk_hash = self.hash_text(chunk)
                 if chunk_hash not in self.chunk_hashes:
                     self.chunk_hashes.add(chunk_hash)
-                    all_chunks.append(chunk)
+                    all_chunks.append({
+                        "content": chunk,
+                        "metadata": {"source": source}
+                    })
         return all_chunks
 
     def build_vectorstore(self, chunks):
@@ -70,7 +75,9 @@ class MultiPDFChatApp:
             model_name="sentence-transformers/all-MiniLM-L6-v2",
             model_kwargs={'device': 'cpu'}
         )
-        return FAISS.from_texts(texts=chunks, embedding=embeddings)
+        texts = [c["content"] for c in chunks]
+        metadatas = [c["metadata"] for c in chunks]
+        return FAISS.from_texts(texts=texts, embedding=embeddings, metadatas=metadatas)
 
     def run_chat(self):
         try:
@@ -98,10 +105,13 @@ class MultiPDFChatApp:
                 model_kwargs={'device': 'cpu'}
             )
 
+            texts = [c["content"] for c in new_chunks]
+            metadatas = [c["metadata"] for c in new_chunks]
+
             if not self.vectorstore:
-                self.vectorstore = FAISS.from_texts(new_chunks, embedding=embeddings)
+                self.vectorstore = FAISS.from_texts(texts=texts, embedding=embeddings, metadatas=metadatas)
             else:
-                self.vectorstore.add_texts(new_chunks, embedding=embeddings)
+                self.vectorstore.add_texts(texts=texts, embedding=embeddings, metadatas=metadatas)
 
             print(f"✅ Added {len(new_chunks)} new chunks.")
         except Exception as e:
@@ -115,12 +125,24 @@ class MultiPDFChatApp:
             if self.vectorstore:
                 chain = ConversationalRetrievalChain.from_llm(
                     llm=self.llm,
-                    retriever=self.vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 4}),
+                    retriever=self.vectorstore.as_retriever(
+                        search_type="similarity", search_kwargs={"k": 4}
+                    ),
                     memory=self.memory,
-                    return_source_documents=False
+                    return_source_documents=True
                 )
                 response = chain.invoke({'question': question})
-                return response.get("answer", "Sorry, no answer could be generated.")
+                answer = response.get("answer", "Sorry, no answer could be generated.")
+                sources = response.get("source_documents", [])
+
+                # 🔍 Add source info
+                if sources:
+                    source_info = "\n\n📄 **Sources:**\n" + "\n".join(
+                        f"- {doc.metadata.get('source', 'Unknown')}" for doc in sources
+                    )
+                    return answer + source_info
+                else:
+                    return answer
             else:
                 return self.llm.invoke(question).content
         except Exception as e:

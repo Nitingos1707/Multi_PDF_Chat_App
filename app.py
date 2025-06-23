@@ -46,11 +46,14 @@ with st.sidebar:
         st.success(f"📥 Queued {len(new_files)} file(s) for processing.")
 
 # Background PDF processing (1 per run)
+# Process all queued files at once
 if st.session_state.upload_queue:
-    with st.spinner("🔄 Processing uploaded PDF..."):
-        pdf = st.session_state.upload_queue.pop(0)
-        st.session_state.chat_app.add_new_pdfs([pdf])
-        st.toast(f"✅ {pdf.name} processed!")
+    with st.spinner("🔄 Processing uploaded PDFs..."):
+        while st.session_state.upload_queue:
+            pdf = st.session_state.upload_queue.pop(0)
+            st.session_state.chat_app.add_new_pdfs([pdf])
+            st.toast(f"✅ {pdf.name} processed!")
+
 
 # Display chat history
 for role, message in st.session_state.chat_history:

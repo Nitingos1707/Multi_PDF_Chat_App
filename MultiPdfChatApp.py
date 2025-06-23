@@ -9,6 +9,7 @@ import streamlit as st
 import tiktoken
 import torch
 import hashlib
+from collections import defaultdict
 
 
 class MultiPDFChatApp:
@@ -122,15 +123,30 @@ class MultiPDFChatApp:
 
         try:
             if self.vectorstore:
-                chain = ConversationalRetrievalChain.from_llm(
-                    llm=self.llm,
-                    retriever=self.vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 4}),
-                    memory=self.memory,
-                    return_source_documents=False
+                retriever = self.vectorstore.as_retriever(
+                    search_type="similarity",
+                    search_kwargs={"k": 8}
                 )
-                response = chain.invoke({'question': question})
-                return response.get("answer", "Sorry, no answer could be generated.")
+                docs = retriever.get_relevant_documents(question)
+
+                # Group retrieved docs by source PDF
+                grouped_docs = defaultdict(list)
+                for d in docs:
+                    source = d.metadata.get("source", "unknown.pdf")
+                    grouped_docs[source].append(d)
+
+                # Summarize each document group separately
+                answers = []
+                for source, group in grouped_docs.items():
+                    combined_text = "\n".join([doc.page_content for doc in group])
+                    summary_prompt = f"Summarize the following content from the PDF titled '{source}' into key points:\n\n{combined_text}"
+                    summary = self.llm.invoke(summary_prompt).content
+                    answers.append(f"📄 **{source}**:\n{summary}")
+
+                return "\n\n".join(answers)
+
             else:
                 return self.llm.invoke(question).content
+
         except Exception as e:
             return f"Error during response generation: {str(e)}"

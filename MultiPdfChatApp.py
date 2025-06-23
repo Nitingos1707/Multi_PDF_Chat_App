@@ -10,6 +10,7 @@ import tiktoken
 import torch
 import hashlib
 
+
 class MultiPDFChatApp:
     def __init__(self, project_name: str, pdf_docs: list = []):
         torch.classes.__path__ = []
@@ -19,7 +20,6 @@ class MultiPDFChatApp:
         self.vectorstore = None
         self.chunk_hashes = set()
 
-        # ✅ Groq with llama-3.3-70b-versatile
         self.llm = ChatGroq(
             api_key=st.secrets["GROQ_API_KEY"],
             model_name=st.secrets.get("GROQ_MODEL", "llama-3.3-70b-versatile"),
@@ -41,13 +41,14 @@ class MultiPDFChatApp:
         for pdf in pdfs:
             pdf.seek(0)
             reader = PdfReader(pdf)
+            filename = getattr(pdf, "name", "unknown.pdf")
             for page in reader.pages:
                 text = page.extract_text()
                 if text and text.strip():
-                    raw_texts.append(text)
+                    raw_texts.append((filename, text))
         return raw_texts
 
-    def get_text_chunks(self, texts):
+    def get_text_chunks(self, texts_with_source):
         encoding = tiktoken.get_encoding("cl100k_base")
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
@@ -56,13 +57,16 @@ class MultiPDFChatApp:
             separators=["\n\n", "\n", " ", ""]
         )
         all_chunks = []
-        for text in texts:
+        for filename, text in texts_with_source:
             chunks = splitter.split_text(text)
             for chunk in chunks:
                 chunk_hash = self.hash_text(chunk)
                 if chunk_hash not in self.chunk_hashes:
                     self.chunk_hashes.add(chunk_hash)
-                    all_chunks.append(chunk)
+                    all_chunks.append({
+                        "text": chunk,
+                        "metadata": {"source": filename}
+                    })
         return all_chunks
 
     def build_vectorstore(self, chunks):
@@ -70,7 +74,9 @@ class MultiPDFChatApp:
             model_name="sentence-transformers/all-MiniLM-L6-v2",
             model_kwargs={'device': 'cpu'}
         )
-        return FAISS.from_texts(texts=chunks, embedding=embeddings)
+        texts = [item["text"] for item in chunks]
+        metadatas = [item["metadata"] for item in chunks]
+        return FAISS.from_texts(texts=texts, embedding=embeddings, metadatas=metadatas)
 
     def run_chat(self):
         try:
@@ -98,10 +104,13 @@ class MultiPDFChatApp:
                 model_kwargs={'device': 'cpu'}
             )
 
+            texts = [item["text"] for item in new_chunks]
+            metadatas = [item["metadata"] for item in new_chunks]
+
             if not self.vectorstore:
-                self.vectorstore = FAISS.from_texts(new_chunks, embedding=embeddings)
+                self.vectorstore = FAISS.from_texts(texts=texts, embedding=embeddings, metadatas=metadatas)
             else:
-                self.vectorstore.add_texts(new_chunks, embedding=embeddings)
+                self.vectorstore.add_texts(texts=texts, embedding=embeddings, metadatas=metadatas)
 
             print(f"✅ Added {len(new_chunks)} new chunks.")
         except Exception as e:
